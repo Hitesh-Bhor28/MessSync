@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect } from 'react';
 import { Leaf, TrendingDown, Users } from 'lucide-react';
 
