@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { email, password, role } = await req.json();
+    const { email, password } = await req.json();
     const secret = process.env.JWT_SECRET;
 
     if (!secret) throw new Error("JWT_SECRET missing");
@@ -22,27 +22,22 @@ export async function POST(req: Request) {
 
     await connectDB();
 
-    let user = await User.findOne({ email });
+    const user = await User.findOne({ email });
 
-    // 🔥 AUTO REGISTER (if not exists)
     if (!user) {
-      const hashedPassword = await bcrypt.hash(password, 10);
+      return NextResponse.json(
+        { message: "User not found. Please sign up." },
+        { status: 404 }
+      );
+    }
 
-      user = await User.create({
-        email,
-        password: hashedPassword,
-        role,
-      });
-    } else {
-      // 🔐 Check password
-      const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password);
 
-      if (!isMatch) {
-        return NextResponse.json(
-          { message: "Invalid credentials" },
-          { status: 401 }
-        );
-      }
+    if (!isMatch) {
+      return NextResponse.json(
+        { message: "Invalid credentials" },
+        { status: 401 }
+      );
     }
 
     const token = jwt.sign(
@@ -54,6 +49,7 @@ export async function POST(req: Request) {
     const response = NextResponse.json({
       message: "Login successful",
       role: user.role,
+      name: user.name, // 👈 important for dashboard
     });
 
     response.cookies.set("token", token, {

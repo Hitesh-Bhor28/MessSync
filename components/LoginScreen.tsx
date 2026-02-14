@@ -3,27 +3,38 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, Users, UserCog } from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState, AppDispatch } from "../app/redux/store";
+import Link from "next/link";
+import {
+  setLoading,
+  loginSuccess,
+  loginFailure,
+} from "../app/redux/slices/authSlice";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
+
+  const { loading, error } = useSelector(
+    (state: RootState) => state.auth
+  );
 
   const [selectedRole, setSelectedRole] =
     useState<"student" | "admin">("student");
   const [email, setEmail] = useState("test@test.com");
-  const [password, setPassword] = useState("testpass");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [password, setPassword] = useState("test@test.com");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
+
+    dispatch(setLoading(true));
 
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // ✅ IMPORTANT
+        credentials: "include",
         body: JSON.stringify({
           email,
           password,
@@ -34,23 +45,26 @@ export default function LoginScreen() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.message || "Login failed");
+        dispatch(loginFailure(data.message || "Login failed"));
         return;
       }
 
-      // ❌ REMOVE localStorage
-      // ❌ DO NOT store token manually
+      // ✅ Update Redux store after backend confirms
+      dispatch(
+        loginSuccess({
+          email,
+          role: data.role,
+        })
+      );
 
-      // ✅ Role-based redirect
-      if (selectedRole === "admin") {
+      // ✅ Redirect based on role
+      if (data.role === "admin") {
         router.push("/admin");
       } else {
         router.push("/dashboard");
       }
     } catch (err) {
-      setError("Something went wrong");
-    } finally {
-      setLoading(false);
+      dispatch(loginFailure("Something went wrong"));
     }
   };
 
@@ -80,11 +94,10 @@ export default function LoginScreen() {
               <button
                 type="button"
                 onClick={() => setSelectedRole("student")}
-                className={`p-4 rounded-xl border-2 ${
-                  selectedRole === "student"
+                className={`p-4 rounded-xl border-2 ${selectedRole === "student"
                     ? "border-green-600 bg-green-50"
                     : "border-gray-200"
-                }`}
+                  }`}
               >
                 <Users className="w-8 h-8 mx-auto mb-2 text-green-600" />
                 Student
@@ -93,11 +106,10 @@ export default function LoginScreen() {
               <button
                 type="button"
                 onClick={() => setSelectedRole("admin")}
-                className={`p-4 rounded-xl border-2 ${
-                  selectedRole === "admin"
+                className={`p-4 rounded-xl border-2 ${selectedRole === "admin"
                     ? "border-green-600 bg-green-50"
                     : "border-gray-200"
-                }`}
+                  }`}
               >
                 <UserCog className="w-8 h-8 mx-auto mb-2 text-green-600" />
                 Admin
@@ -148,6 +160,19 @@ export default function LoginScreen() {
             >
               {loading ? "Logging in..." : "Login"}
             </button>
+
+            <div className="text-center mt-4 text-sm">
+              <span className="text-gray-600">
+                New user?{" "}
+              </span>
+              <Link
+                href="/signup"
+                className="text-green-600 font-medium hover:underline"
+              >
+                Sign up here
+              </Link>
+            </div>
+
           </form>
         </div>
       </div>
