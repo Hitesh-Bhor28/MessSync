@@ -1,18 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function Header() {
+  const pathname = usePathname();
   const router = useRouter();
 
+  const isAdmin = pathname.startsWith("/admin");
+
   const handleLogout = async () => {
-  await fetch("/api/auth/logout", { method: "POST" });
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    });
 
-  // clear client storage
-  localStorage.removeItem("token");
-
-  router.replace("/");
-};
+    window.location.href = "/";
+  };
 
 
   return (
@@ -24,8 +27,12 @@ export default function Header() {
             M
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">MessSync</h1>
-            <p className="text-xs text-gray-500">Student Portal</p>
+            <h1 className="text-lg font-semibold text-gray-900">
+              MessSync
+            </h1>
+            <p className="text-xs text-gray-500">
+              {isAdmin ? "Admin Portal" : "Student Portal"}
+            </p>
           </div>
         </div>
 

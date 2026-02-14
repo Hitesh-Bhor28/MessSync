@@ -1,7 +1,12 @@
+"use client";
+
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Mail, Lock, Users, UserCog } from "lucide-react";
 
 export default function LoginScreen() {
+  const router = useRouter();
+
   const [selectedRole, setSelectedRole] =
     useState<"student" | "admin">("student");
   const [email, setEmail] = useState("test@test.com");
@@ -18,6 +23,7 @@ export default function LoginScreen() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // ✅ IMPORTANT
         body: JSON.stringify({
           email,
           password,
@@ -32,12 +38,15 @@ export default function LoginScreen() {
         return;
       }
 
-      // same pattern as netflix-gpt / devTinder
-      localStorage.setItem("token", data.token);
+      // ❌ REMOVE localStorage
+      // ❌ DO NOT store token manually
 
-      // role-based redirect
-      window.location.href =
-        selectedRole === "admin" ? "/admin" : "/dashboard";
+      // ✅ Role-based redirect
+      if (selectedRole === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err) {
       setError("Something went wrong");
     } finally {
@@ -130,9 +139,7 @@ export default function LoginScreen() {
               </div>
             </div>
 
-            {error && (
-              <p className="text-sm text-red-600">{error}</p>
-            )}
+            {error && <p className="text-sm text-red-600">{error}</p>}
 
             <button
               type="submit"
