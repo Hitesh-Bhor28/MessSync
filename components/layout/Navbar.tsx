@@ -25,6 +25,9 @@ export default function Navbar() {
         <Link href="/history" className={linkStyle("/history")}>
           History
         </Link>
+        <Link href="/profile" className={linkStyle("/profile")}>
+          Profile
+        </Link>
       </div>
     </nav>
   );

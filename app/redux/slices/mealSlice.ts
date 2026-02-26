@@ -30,6 +30,19 @@ const mealSlice = createSlice({
       state.selectedDate = action.payload;
     },
 
+    setMeals: (
+      state,
+      action: PayloadAction<{
+        breakfast: boolean;
+        lunch: boolean;
+        dinner: boolean;
+      }>
+    ) => {
+      state.meals = action.payload;
+      state.loading = false;
+      state.error = null;
+    },
+
     toggleMeal: (
       state,
       action: PayloadAction<"breakfast" | "lunch" | "dinner">
@@ -56,6 +69,7 @@ const mealSlice = createSlice({
 
 export const {
   setDate,
+  setMeals,
   toggleMeal,
   setLoading,
   saveSuccess,

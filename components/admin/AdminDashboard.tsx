@@ -1,8 +1,72 @@
-import { useState } from 'react';
+"use client";
+
+import { useEffect, useState } from 'react';
 import { Calendar, Users, TrendingUp, TrendingDown, ChevronLeft, ChevronRight } from 'lucide-react';
+
+interface MealMetric {
+  count: number;
+  total: number;
+  percentage: number;
+  change: number;
+}
+
+interface DashboardData {
+  totalStudents: number;
+  responses: number;
+  avgAttendance: number;
+  pending: number;
+  served: {
+    breakfast: number;
+    lunch: number;
+    dinner: number;
+  };
+  meals: {
+    breakfast: MealMetric;
+    lunch: MealMetric;
+    dinner: MealMetric;
+  };
+}
 
 export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState('tomorrow');
+  const [customDate, setCustomDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const year = tomorrow.getFullYear();
+    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const day = String(tomorrow.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const [data, setData] = useState<DashboardData>({
+    totalStudents: 0,
+    responses: 0,
+    avgAttendance: 0,
+    pending: 0,
+    served: {
+      breakfast: 0,
+      lunch: 0,
+      dinner: 0,
+    },
+    meals: {
+      breakfast: { count: 0, total: 0, percentage: 0, change: 0 },
+      lunch: { count: 0, total: 0, percentage: 0, change: 0 },
+      dinner: { count: 0, total: 0, percentage: 0, change: 0 },
+    },
+  });
+  const [isSendingReminders, setIsSendingReminders] = useState(false);
+  const [servedCounts, setServedCounts] = useState({
+    breakfast: 0,
+    lunch: 0,
+    dinner: 0,
+  });
+  const [isSavingServed, setIsSavingServed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reminderToast, setReminderToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [isExportingDaily, setIsExportingDaily] = useState(false);
 
   const getTomorrowDate = () => {
     const tomorrow = new Date();
@@ -15,29 +79,200 @@ export default function AdminDashboard() {
     });
   };
 
-  const mealData = {
-    breakfast: {
-      count: 287,
-      total: 350,
-      percentage: 82,
-      change: +5
-    },
-    lunch: {
-      count: 312,
-      total: 350,
-      percentage: 89,
-      change: -3
-    },
-    dinner: {
-      count: 245,
-      total: 350,
-      percentage: 70,
-      change: +12
+  useEffect(() => {
+    let ignore = false;
+
+    const loadDashboard = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const dateQuery =
+          selectedDate === 'custom' ? customDate : selectedDate;
+        const res = await fetch(`/api/admin/dashboard?date=${dateQuery}`, {
+          credentials: 'include',
+        });
+        const payload = await res.json();
+
+        if (!res.ok) {
+          throw new Error(payload?.message || 'Failed to load dashboard');
+        }
+
+        if (!ignore) {
+          setData(payload);
+          setServedCounts({
+            breakfast: payload?.served?.breakfast ?? 0,
+            lunch: payload?.served?.lunch ?? 0,
+            dinner: payload?.served?.dinner ?? 0,
+          });
+        }
+      } catch (err: any) {
+        if (!ignore) {
+          setData({
+            totalStudents: 0,
+            responses: 0,
+            avgAttendance: 0,
+            pending: 0,
+            served: {
+              breakfast: 0,
+              lunch: 0,
+              dinner: 0,
+            },
+            meals: {
+              breakfast: { count: 0, total: 0, percentage: 0, change: 0 },
+              lunch: { count: 0, total: 0, percentage: 0, change: 0 },
+              dinner: { count: 0, total: 0, percentage: 0, change: 0 },
+            },
+          });
+          setServedCounts({
+            breakfast: 0,
+            lunch: 0,
+            dinner: 0,
+          });
+          setError(err?.message || "Failed to load dashboard");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedDate, customDate]);
+
+  const mealData = data.meals;
+  const dateQuery =
+    selectedDate === 'custom' ? customDate : selectedDate;
+  const expectedTotal =
+    mealData.breakfast.count + mealData.lunch.count + mealData.dinner.count;
+  const servedTotal =
+    data.served.breakfast + data.served.lunch + data.served.dinner;
+  const wasteTotal = Math.max(expectedTotal - servedTotal, 0);
+  const accuracyPercent = expectedTotal
+    ? Math.round((servedTotal / expectedTotal) * 100)
+    : 0;
+
+  const handleSendReminders = async () => {
+    if (isSendingReminders) return;
+    setIsSendingReminders(true);
+
+    try {
+      const res = await fetch(`/api/admin/reminders?date=${dateQuery}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const payload = await res.json();
+
+      if (!res.ok) {
+        throw new Error(payload?.message || 'Failed to send reminders');
+      }
+
+      setReminderToast({
+        type: "success",
+        message: payload?.message || "Reminders sent.",
+      });
+      setTimeout(() => {
+        setReminderToast(null);
+      }, 3000);
+    } catch (err: any) {
+      setReminderToast({
+        type: "error",
+        message: err?.message || "Failed to send reminders",
+      });
+      setTimeout(() => {
+        setReminderToast(null);
+      }, 3000);
+    } finally {
+      setIsSendingReminders(false);
+    }
+  };
+
+  const handleSaveServed = async () => {
+    if (isSavingServed) return;
+    setIsSavingServed(true);
+
+    try {
+      await fetch("/api/admin/served", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          date: dateQuery,
+          meals: servedCounts,
+        }),
+      });
+      setData((prev) => ({
+        ...prev,
+        served: {
+          breakfast: servedCounts.breakfast,
+          lunch: servedCounts.lunch,
+          dinner: servedCounts.dinner,
+        },
+      }));
+    } finally {
+      setIsSavingServed(false);
+    }
+  };
+
+  const handleExportDaily = async () => {
+    if (isExportingDaily) return;
+    setIsExportingDaily(true);
+
+    try {
+      const res = await fetch(
+        `/api/admin/reports/export/daily/pdf?date=${dateQuery}`,
+        {
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to export daily report");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `daily-report-${dateQuery}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExportingDaily(false);
     }
   };
 
   return (
     <div className="space-y-6">
+      {loading && (
+        <div className="text-sm text-gray-500">
+          Loading dashboard...
+        </div>
+      )}
+      {error && (
+        <div className="text-sm text-red-600">
+          {error}
+        </div>
+      )}
+      {reminderToast && (
+        <div
+          className={`fixed top-6 right-6 px-6 py-4 rounded-xl shadow-lg z-50 text-white ${
+            reminderToast.type === "success"
+              ? "bg-green-600"
+              : "bg-red-600"
+          }`}
+        >
+          {reminderToast.message}
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -76,17 +311,29 @@ export default function AdminDashboard() {
             Tomorrow
             <div className="text-sm font-normal mt-1">{getTomorrowDate()}</div>
           </button>
-          <button
-            onClick={() => setSelectedDate('custom')}
-            className={`flex-1 px-4 py-3 rounded-lg border-2 font-medium transition-all ${
-              selectedDate === 'custom'
-                ? 'border-green-600 bg-green-50 text-green-700'
-                : 'border-gray-200 text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Custom Date
-            <div className="text-sm font-normal mt-1">Select any date</div>
-          </button>
+          <div className="flex-1">
+            <button
+              onClick={() => setSelectedDate('custom')}
+              className={`w-full px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                selectedDate === 'custom'
+                  ? 'border-green-600 bg-green-50 text-green-700'
+                  : 'border-gray-200 text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Custom Date
+              <div className="text-sm font-normal mt-1">Select any date</div>
+            </button>
+            {selectedDate === 'custom' && (
+              <div className="mt-3">
+                <input
+                  type="date"
+                  value={customDate}
+                  onChange={(event) => setCustomDate(event.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -97,7 +344,7 @@ export default function AdminDashboard() {
             <span className="text-sm font-medium text-gray-600">Total Students</span>
             <Users className="w-5 h-5 text-blue-600" />
           </div>
-          <div className="text-3xl font-bold text-gray-900">350</div>
+          <div className="text-3xl font-bold text-gray-900">{data.totalStudents}</div>
           <div className="text-sm text-gray-500 mt-1">Hostel capacity</div>
         </div>
 
@@ -106,8 +353,12 @@ export default function AdminDashboard() {
             <span className="text-sm font-medium text-gray-600">Responses</span>
             <TrendingUp className="w-5 h-5 text-green-600" />
           </div>
-          <div className="text-3xl font-bold text-gray-900">342</div>
-          <div className="text-sm text-gray-500 mt-1">98% submitted</div>
+          <div className="text-3xl font-bold text-gray-900">{data.responses}</div>
+          <div className="text-sm text-gray-500 mt-1">
+            {data.totalStudents
+              ? Math.round((data.responses / data.totalStudents) * 100)
+              : 0}% submitted
+          </div>
         </div>
 
         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
@@ -115,7 +366,7 @@ export default function AdminDashboard() {
             <span className="text-sm font-medium text-gray-600">Avg Attendance</span>
             <TrendingUp className="w-5 h-5 text-purple-600" />
           </div>
-          <div className="text-3xl font-bold text-gray-900">80%</div>
+          <div className="text-3xl font-bold text-gray-900">{data.avgAttendance}%</div>
           <div className="text-sm text-gray-500 mt-1">Across all meals</div>
         </div>
 
@@ -124,8 +375,27 @@ export default function AdminDashboard() {
             <span className="text-sm font-medium text-gray-600">Pending</span>
             <TrendingDown className="w-5 h-5 text-orange-600" />
           </div>
-          <div className="text-3xl font-bold text-gray-900">8</div>
+          <div className="text-3xl font-bold text-gray-900">{data.pending}</div>
           <div className="text-sm text-gray-500 mt-1">Not yet submitted</div>
+        </div>
+      </div>
+
+      {/* Served vs Expected */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <div className="text-sm font-medium text-gray-600 mb-2">Expected Meals</div>
+          <div className="text-3xl font-bold text-gray-900">{expectedTotal}</div>
+          <div className="text-sm text-gray-500 mt-1">Based on submissions</div>
+        </div>
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <div className="text-sm font-medium text-gray-600 mb-2">Served Meals</div>
+          <div className="text-3xl font-bold text-gray-900">{servedTotal}</div>
+          <div className="text-sm text-gray-500 mt-1">Recorded by admin</div>
+        </div>
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <div className="text-sm font-medium text-gray-600 mb-2">Accuracy & Waste</div>
+          <div className="text-3xl font-bold text-gray-900">{accuracyPercent}%</div>
+          <div className="text-sm text-gray-500 mt-1">{wasteTotal} meals waste</div>
         </div>
       </div>
 
@@ -254,13 +524,63 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Served Counts */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-gray-900">Actual Meals Served</h3>
+            <p className="text-sm text-gray-600">Record served counts for accurate waste and accuracy</p>
+          </div>
+          <button
+            onClick={handleSaveServed}
+            disabled={isSavingServed}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {isSavingServed ? "Saving..." : "Save Served Counts"}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {(["breakfast", "lunch", "dinner"] as const).map((meal) => (
+            <div key={meal} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700 capitalize">{meal}</span>
+                <span className="text-xs text-gray-500">
+                  Expected: {mealData[meal].count}
+                </span>
+              </div>
+              <input
+                type="number"
+                min="0"
+                value={servedCounts[meal]}
+                onChange={(event) =>
+                  setServedCounts((prev) => ({
+                    ...prev,
+                    [meal]: Number(event.target.value || 0),
+                  }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Action Buttons */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <button className="bg-green-600 text-white py-3 px-6 rounded-xl font-medium hover:bg-green-700 transition-colors shadow-lg">
-          Export Daily Report
+        <button
+          onClick={handleExportDaily}
+          disabled={isExportingDaily}
+          className="bg-green-600 text-white py-3 px-6 rounded-xl font-medium hover:bg-green-700 transition-colors shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          {isExportingDaily ? "Exporting..." : "Export Daily Report"}
         </button>
-        <button className="bg-white border-2 border-gray-300 text-gray-700 py-3 px-6 rounded-xl font-medium hover:border-gray-400 transition-colors">
-          Send Reminder to Pending Students
+        <button
+          onClick={handleSendReminders}
+          disabled={isSendingReminders}
+          className="bg-white border-2 border-gray-300 text-gray-700 py-3 px-6 rounded-xl font-medium hover:border-gray-400 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          {isSendingReminders ? "Sending..." : "Send Reminder to Pending Students"}
         </button>
       </div>
     </div>

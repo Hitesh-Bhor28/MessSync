@@ -1,38 +1,129 @@
+"use client";
+
+import { useEffect, useState } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Calendar, TrendingDown, TrendingUp, Download } from 'lucide-react';
 
-const weeklyData = [
-  { day: 'Mon', expected: 280, served: 275, waste: 5 },
-  { day: 'Tue', expected: 295, served: 290, waste: 5 },
-  { day: 'Wed', expected: 310, served: 305, waste: 5 },
-  { day: 'Thu', expected: 285, served: 282, waste: 3 },
-  { day: 'Fri', expected: 270, served: 268, waste: 2 },
-  { day: 'Sat', expected: 245, served: 242, waste: 3 },
-  { day: 'Sun', expected: 230, served: 228, waste: 2 }
-];
+interface WeeklyDatum {
+  day: string;
+  expected: number;
+  served: number;
+  waste: number;
+}
 
-const mealDistribution = [
-  { name: 'Breakfast', value: 287, color: '#f97316' },
-  { name: 'Lunch', value: 312, color: '#eab308' },
-  { name: 'Dinner', value: 245, color: '#6366f1' }
-];
+interface DistributionDatum {
+  name: string;
+  value: number;
+  color: string;
+}
 
-const wasteComparison = [
-  { week: 'Week 1', traditional: 45, withSystem: 18 },
-  { week: 'Week 2', traditional: 52, withSystem: 15 },
-  { week: 'Week 3', traditional: 48, withSystem: 20 },
-  { week: 'Week 4', traditional: 50, withSystem: 17 }
-];
+interface WasteDatum {
+  week: string;
+  traditional: number;
+  withSystem: number;
+}
 
 export default function WeeklyReports() {
+  const [weeklyData, setWeeklyData] = useState<WeeklyDatum[]>([]);
+  const [mealDistribution, setMealDistribution] = useState<DistributionDatum[]>([]);
+  const [wasteComparison, setWasteComparison] = useState<WasteDatum[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadReports = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch('/api/admin/reports?days=7', {
+          credentials: 'include',
+        });
+        const payload = await res.json();
+
+        if (!res.ok) {
+          throw new Error(payload?.message || 'Failed to load reports');
+        }
+
+        if (!ignore) {
+          setWeeklyData(Array.isArray(payload?.weeklyData) ? payload.weeklyData : []);
+          setMealDistribution(Array.isArray(payload?.mealDistribution) ? payload.mealDistribution : []);
+          setWasteComparison(Array.isArray(payload?.wasteComparison) ? payload.wasteComparison : []);
+        }
+      } catch (err: any) {
+        if (!ignore) {
+          setWeeklyData([]);
+          setMealDistribution([]);
+          setWasteComparison([]);
+          setError(err?.message || "Failed to load reports");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadReports();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   const totalExpected = weeklyData.reduce((sum, day) => sum + day.expected, 0);
   const totalServed = weeklyData.reduce((sum, day) => sum + day.served, 0);
   const totalWaste = weeklyData.reduce((sum, day) => sum + day.waste, 0);
-  const accuracy = ((totalServed / totalExpected) * 100).toFixed(1);
-  const wastePercentage = ((totalWaste / totalExpected) * 100).toFixed(1);
+  const accuracy = totalExpected
+    ? ((totalServed / totalExpected) * 100).toFixed(1)
+    : "0.0";
+  const wastePercentage = totalExpected
+    ? ((totalWaste / totalExpected) * 100).toFixed(1)
+    : "0.0";
+
+  const handleExport = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+
+    try {
+      const res = await fetch("/api/admin/reports/export/pdf?days=7", {
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to export report");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `weekly-report-${new Date()
+        .toISOString()
+        .slice(0, 10)}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
+      {loading && (
+        <div className="text-sm text-gray-500">
+          Loading reports...
+        </div>
+      )}
+      {error && (
+        <div className="text-sm text-red-600">
+          {error}
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -41,9 +132,13 @@ export default function WeeklyReports() {
             Analytics and reports for meal planning and waste reduction
           </p>
         </div>
-        <button className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors">
+        <button
+          onClick={handleExport}
+          disabled={isExporting}
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+        >
           <Download className="w-4 h-4" />
-          Export Report
+          {isExporting ? "Exporting..." : "Export Report"}
         </button>
       </div>
 

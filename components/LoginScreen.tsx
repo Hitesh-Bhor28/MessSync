@@ -22,8 +22,8 @@ export default function LoginScreen() {
 
   const [selectedRole, setSelectedRole] =
     useState<"student" | "admin">("student");
-  const [email, setEmail] = useState("test@test.com");
-  const [password, setPassword] = useState("test@test.com");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +38,6 @@ export default function LoginScreen() {
         body: JSON.stringify({
           email,
           password,
-          role: selectedRole,
         }),
       });
 

@@ -4,12 +4,13 @@ const UserSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true, // 👈 ADD THIS
+      required: true,
     },
     email: {
       type: String,
       required: true,
       unique: true,
+      index: true,
     },
     password: {
       type: String,
@@ -19,10 +20,13 @@ const UserSchema = new mongoose.Schema(
       type: String,
       enum: ["student", "admin"],
       required: true,
+      default: "student",
     },
   },
   { timestamps: true }
 );
+
+UserSchema.index({ role: 1, createdAt: -1 });
 
 export default mongoose.models.User ||
   mongoose.model("User", UserSchema);

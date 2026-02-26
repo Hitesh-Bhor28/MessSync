@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from 'react';
 import { Calendar, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 interface MealRecord {
@@ -8,59 +11,50 @@ interface MealRecord {
   status: 'submitted' | 'missed';
 }
 
-const mockHistory: MealRecord[] = [
-  {
-    date: '2026-01-05',
-    breakfast: true,
-    lunch: true,
-    dinner: false,
-    status: 'submitted'
-  },
-  {
-    date: '2026-01-04',
-    breakfast: true,
-    lunch: false,
-    dinner: true,
-    status: 'submitted'
-  },
-  {
-    date: '2026-01-03',
-    breakfast: false,
-    lunch: true,
-    dinner: true,
-    status: 'submitted'
-  },
-  {
-    date: '2026-01-02',
-    breakfast: true,
-    lunch: true,
-    dinner: true,
-    status: 'submitted'
-  },
-  {
-    date: '2026-01-01',
-    breakfast: true,
-    lunch: true,
-    dinner: false,
-    status: 'submitted'
-  },
-  {
-    date: '2025-12-31',
-    breakfast: false,
-    lunch: false,
-    dinner: false,
-    status: 'missed'
-  },
-  {
-    date: '2025-12-30',
-    breakfast: true,
-    lunch: true,
-    dinner: true,
-    status: 'submitted'
-  }
-];
-
 export default function MealHistory() {
+  const [history, setHistory] = useState<MealRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadHistory = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch('/api/meals?days=7', {
+          credentials: 'include',
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data?.message || 'Failed to load meal history');
+        }
+
+        if (!ignore) {
+          setHistory(Array.isArray(data?.history) ? data.history : []);
+        }
+      } catch (err: any) {
+        if (!ignore) {
+          setHistory([]);
+          setError(err?.message || 'Failed to load meal history');
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadHistory();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
@@ -71,12 +65,28 @@ export default function MealHistory() {
     });
   };
 
-  const totalMeals = mockHistory.reduce((acc, record) => {
+  const totalMeals = history.reduce((acc, record) => {
     return acc + (record.breakfast ? 1 : 0) + (record.lunch ? 1 : 0) + (record.dinner ? 1 : 0);
   }, 0);
 
-  const totalSubmitted = mockHistory.filter(r => r.status === 'submitted').length;
-  const totalMissed = mockHistory.filter(r => r.status === 'missed').length;
+  const totalSubmitted = history.filter(r => r.status === 'submitted').length;
+  const totalMissed = history.filter(r => r.status === 'missed').length;
+
+  if (loading) {
+    return (
+      <div className="text-center py-20 text-gray-600">
+        Loading meal history...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-20 text-red-500">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -132,7 +142,7 @@ export default function MealHistory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {mockHistory.map((record, index) => (
+              {history.map((record, index) => (
                 <tr key={index} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">

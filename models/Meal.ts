@@ -11,12 +11,14 @@ const MealSchema = new mongoose.Schema(
       required: true,
     },
     meals: {
-      breakfast: Boolean,
-      lunch: Boolean,
-      dinner: Boolean,
+      breakfast: { type: Boolean, default: false },
+      lunch: { type: Boolean, default: false },
+      dinner: { type: Boolean, default: false },
     },
   },
   { timestamps: true }
 );
+
+MealSchema.index({ email: 1, date: 1 }, { unique: true });
 
 export default mongoose.models.Meal || mongoose.model("Meal", MealSchema);

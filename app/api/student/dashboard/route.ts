@@ -5,6 +5,13 @@ import Meal from "@/models/Meal";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 
+const toLocalDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export async function GET() {
   try {
     await connectDB();
@@ -40,15 +47,30 @@ export async function GET() {
     }
 
     // 🍽 Get meals
-    const todayMeal = await Meal.findOne({
-      email: decoded.email,
-      date: "today",
-    });
+    const todayKey = toLocalDateKey(new Date());
+    const tomorrowDate = new Date();
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowKey = toLocalDateKey(tomorrowDate);
 
-    const tomorrowMeal = await Meal.findOne({
-      email: decoded.email,
-      date: "tomorrow",
-    });
+    const todayMeal =
+      (await Meal.findOne({
+        email: decoded.email,
+        date: todayKey,
+      })) ||
+      (await Meal.findOne({
+        email: decoded.email,
+        date: "today",
+      }));
+
+    const tomorrowMeal =
+      (await Meal.findOne({
+        email: decoded.email,
+        date: tomorrowKey,
+      })) ||
+      (await Meal.findOne({
+        email: decoded.email,
+        date: "tomorrow",
+      }));
 
     const todayMeals = todayMeal?.meals || {
       breakfast: false,

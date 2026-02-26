@@ -1,26 +1,105 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState, AppDispatch } from "../../app/redux/store";
 import {
   toggleMeal,
   setDate,
+  setMeals,
   setLoading,
   saveSuccess,
   saveFailure,
 } from "../../app/redux/slices/mealSlice";
+import {
+  setDashboardData,
+  setError as setDashboardError,
+  setLoading as setDashboardLoading,
+} from "../../app/redux/slices/dashboardSlice";
 
 import { Calendar, Clock, CheckCircle, Save } from "lucide-react";
 
 export default function MealSelection() {
   const dispatch = useDispatch<AppDispatch>();
 
-  const { selectedDate, meals, loading } = useSelector(
+  const { selectedDate, meals, loading, error } = useSelector(
     (state: RootState) => state.meals
   );
 
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const toLocalDateKey = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const resolveDateKey = (value: string) => {
+    if (value === "today") {
+      return toLocalDateKey(new Date());
+    }
+    if (value === "tomorrow") {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return toLocalDateKey(tomorrow);
+    }
+    return value;
+  };
+
+  const getTomorrowKey = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return toLocalDateKey(tomorrow);
+  };
+
+  const dateInputValue =
+    selectedDate === "tomorrow" ? getTomorrowKey() : selectedDate;
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadMeals = async () => {
+      dispatch(setLoading(true));
+
+      try {
+        const res = await fetch(
+          `/api/meals?date=${resolveDateKey(selectedDate)}`,
+          {
+            credentials: "include",
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          dispatch(saveFailure(data?.message || "Failed to load meals"));
+          return;
+        }
+
+        if (!ignore) {
+          dispatch(
+            setMeals({
+              breakfast: Boolean(data?.meals?.breakfast),
+              lunch: Boolean(data?.meals?.lunch),
+              dinner: Boolean(data?.meals?.dinner),
+            })
+          );
+        }
+      } catch {
+        if (!ignore) {
+          dispatch(saveFailure("Failed to load meals"));
+        }
+      }
+    };
+
+    loadMeals();
+
+    return () => {
+      ignore = true;
+    };
+  }, [dispatch, selectedDate]);
 
   const handleToggle = (
     meal: "breakfast" | "lunch" | "dinner"
@@ -29,6 +108,7 @@ export default function MealSelection() {
   };
 
   const handleSubmit = async () => {
+    setIsSaving(true);
     dispatch(setLoading(true));
 
     try {
@@ -39,7 +119,7 @@ export default function MealSelection() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          date: selectedDate,
+          date: resolveDateKey(selectedDate),
           meals,
         }),
       });
@@ -53,12 +133,34 @@ export default function MealSelection() {
 
       dispatch(saveSuccess());
 
+      dispatch(setDashboardLoading(true));
+      try {
+        const dashboardRes = await fetch("/api/student/dashboard", {
+          credentials: "include",
+        });
+        const dashboardData = await dashboardRes.json();
+
+        if (!dashboardRes.ok) {
+          dispatch(
+            setDashboardError(
+              dashboardData?.message || "Failed to refresh dashboard"
+            )
+          );
+        } else {
+          dispatch(setDashboardData(dashboardData));
+        }
+      } catch {
+        dispatch(setDashboardError("Failed to refresh dashboard"));
+      }
+
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
       }, 3000);
     } catch (err: any) {
       dispatch(saveFailure("Failed to save meal selection"));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -80,9 +182,19 @@ export default function MealSelection() {
           Meal Selection
         </h2>
         <p className="text-gray-600">
-          Mark your meal attendance for tomorrow. Changes can be made until
-          10:00 PM today.
+          Mark your meal attendance for your selected date. Changes can be made
+          until 10:00 PM today.
         </p>
+        {error && (
+          <p className="mt-3 text-sm text-red-600">
+            {error}
+          </p>
+        )}
+        {loading && !isSaving && (
+          <p className="mt-3 text-sm text-gray-500">
+            Loading selection...
+          </p>
+        )}
       </div>
 
       {/* Success Toast */}
@@ -115,15 +227,18 @@ export default function MealSelection() {
             </div>
           </button>
 
-          <button
-            disabled
-            className="flex-1 px-4 py-3 rounded-lg border-2 border-gray-200 text-gray-400 cursor-not-allowed"
-          >
-            Other Dates
-            <div className="text-sm font-normal mt-1">
-              Coming Soon
-            </div>
-          </button>
+          <div className="flex-1 px-4 py-3 rounded-lg border-2 border-gray-200">
+            <label className="block text-sm font-medium text-gray-700">
+              Other Date
+            </label>
+            <input
+              type="date"
+              min={getTomorrowKey()}
+              value={dateInputValue}
+              onChange={(event) => dispatch(setDate(event.target.value))}
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-700 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+            />
+          </div>
         </div>
       </div>
 
@@ -224,17 +339,17 @@ export default function MealSelection() {
         <p className="text-sm text-gray-600 mt-1">
           You have selected{" "}
           {Object.values(meals).filter(Boolean).length} out of 3
-          meals for tomorrow
+          meals for {selectedDate === "tomorrow" ? "tomorrow" : "this date"}
         </p>
 
         <div className="flex gap-3 mt-4">
           <button
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={isSaving}
             className="flex-1 bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
           >
             <Save className="w-5 h-5" />
-            {loading ? "Saving..." : "Save Meal Selection"}
+            {isSaving ? "Saving..." : "Save Meal Selection"}
           </button>
         </div>
       </div>

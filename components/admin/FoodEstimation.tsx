@@ -1,4 +1,6 @@
-import { useState } from 'react';
+"use client";
+
+import { useEffect, useState } from 'react';
 import { Calculator, Users, Package } from 'lucide-react';
 
 interface FoodItem {
@@ -20,12 +22,59 @@ const foodItems: FoodItem[] = [
 export default function FoodEstimation() {
   const [selectedMeal, setSelectedMeal] = useState<'breakfast' | 'lunch' | 'dinner'>('lunch');
   const [customQuantities, setCustomQuantities] = useState<{ [key: string]: number }>({});
+  const [studentCounts, setStudentCounts] = useState({
+    breakfast: 0,
+    lunch: 0,
+    dinner: 0,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const studentCounts = {
-    breakfast: 287,
-    lunch: 312,
-    dinner: 245
-  };
+  useEffect(() => {
+    let ignore = false;
+
+    const loadCounts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch('/api/admin/dashboard?date=tomorrow', {
+          credentials: 'include',
+        });
+        const payload = await res.json();
+
+        if (!res.ok) {
+          throw new Error(payload?.message || 'Failed to load counts');
+        }
+
+        if (!ignore) {
+          setStudentCounts({
+            breakfast: payload?.mealCounts?.breakfast ?? 0,
+            lunch: payload?.mealCounts?.lunch ?? 0,
+            dinner: payload?.mealCounts?.dinner ?? 0,
+          });
+        }
+      } catch (err: any) {
+        if (!ignore) {
+          setStudentCounts({
+            breakfast: 0,
+            lunch: 0,
+            dinner: 0,
+          });
+          setError(err?.message || "Failed to load counts");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadCounts();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const currentStudents = studentCounts[selectedMeal];
 
@@ -55,6 +104,12 @@ export default function FoodEstimation() {
         <p className="text-gray-600">
           Calculate required food quantities based on expected student count
         </p>
+        {loading && (
+          <p className="mt-2 text-sm text-gray-500">Loading counts...</p>
+        )}
+        {error && (
+          <p className="mt-2 text-sm text-red-600">{error}</p>
+        )}
       </div>
 
       {/* Meal Selection */}

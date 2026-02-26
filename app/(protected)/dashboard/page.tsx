@@ -2,7 +2,11 @@
 
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
-import { setDashboardData, setLoading } from "../../redux/slices/dashboardSlice";
+import {
+  setDashboardData,
+  setLoading,
+  setError,
+} from "../../redux/slices/dashboardSlice";
 import StudentDashboard from "@/components/student/StudentDashboard";
 import { useRouter } from "next/navigation";
 
@@ -21,9 +25,14 @@ export default function DashboardPage() {
 
         const data = await res.json();
 
+        if (!res.ok) {
+          dispatch(setError(data?.message || "Failed to load dashboard"));
+          return;
+        }
+
         dispatch(setDashboardData(data));
       } catch (err) {
-        console.error(err);
+        dispatch(setError("Failed to load dashboard"));
       }
     };
 
