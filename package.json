@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node scripts/patch-swc-helpers.js"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.11.2",

@@ -2,13 +2,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, Users, UserCog, User } from "lucide-react";
+import { Mail, Lock, User } from "lucide-react";
 
 export default function SignupPage() {
     const router = useRouter();
-
-    const [selectedRole, setSelectedRole] =
-        useState<"student" | "admin">("student");
 
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
@@ -30,7 +27,7 @@ export default function SignupPage() {
                     name,
                     email,
                     password,
-                    role: selectedRole,
+                    role: "student",
                 }),
             });
 
@@ -57,7 +54,6 @@ export default function SignupPage() {
                 </h1>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-
                     <div className="relative">
                         <User className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
                         <input

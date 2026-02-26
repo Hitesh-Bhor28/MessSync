@@ -128,6 +128,7 @@ export default function LoginScreen() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
                   required
                   className="w-full pl-10 py-3 border rounded-lg"
                 />
@@ -144,6 +145,7 @@ export default function LoginScreen() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Your password"
                   required
                   className="w-full pl-10 py-3 border rounded-lg"
                 />
