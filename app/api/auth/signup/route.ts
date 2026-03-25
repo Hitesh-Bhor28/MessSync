@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
-import {connectDB} from "../../../../lib/db";
+import { connectDB } from "../../../../lib/db";
 import User from "@/models/User";
+import Otp from "@/models/Otp";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: Request) {
   try {
     await connectDB();
 
-    const { name, email, password, role } = await req.json();
+    const { name, email, password, role, otp } = await req.json();
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !otp) {
       return NextResponse.json(
-        { message: "All fields required" },
+        { message: "All fields including OTP are required" },
         { status: 400 }
       );
     }
@@ -25,6 +26,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const validOtp = await Otp.findOne({ email, otp });
+    if (!validOtp) {
+      return NextResponse.json(
+        { message: "Invalid or expired OTP" },
+        { status: 400 }
+      );
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await User.create({
@@ -33,6 +42,8 @@ export async function POST(req: Request) {
       password: hashedPassword,
       role,
     });
+
+    await Otp.deleteOne({ email });
 
     return NextResponse.json({
       message: "Signup successful",
