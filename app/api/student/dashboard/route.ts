@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import User from "@/models/User";
 import Meal from "@/models/Meal";
-import { cookies } from "next/headers";
+import { getAuthToken } from "@/lib/auth";
 import jwt from "jsonwebtoken";
 
 const toLocalDateKey = (date: Date) => {
@@ -12,13 +12,12 @@ const toLocalDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await connectDB();
 
     // 🔐 Get token
-    const cookieStore = await cookies();
-    const token = cookieStore.get("token")?.value;
+    const token = await getAuthToken(req);
 
     if (!token) {
       return NextResponse.json(

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getAuthToken } from "@/lib/auth";
 import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/db";
 import ServedMeal from "@/models/ServedMeal";
@@ -25,12 +25,11 @@ const resolveDateKey = (value: string | null) => {
   return value;
 };
 
-const getAdminFromToken = async () => {
+const getAdminFromToken = async (req: Request) => {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET missing");
 
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
+  const token = await getAuthToken(req);
 
   if (!token) return null;
 
@@ -45,7 +44,7 @@ const getAdminFromToken = async () => {
 
 export async function GET(req: Request) {
   try {
-    const email = await getAdminFromToken();
+    const email = await getAdminFromToken(req);
     if (!email) {
       return NextResponse.json(
         { message: "Unauthorized" },
@@ -80,7 +79,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const email = await getAdminFromToken();
+    const email = await getAdminFromToken(req);
     if (!email) {
       return NextResponse.json(
         { message: "Unauthorized" },

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getAuthToken } from "@/lib/auth";
 import jwt from "jsonwebtoken";
 import { connectDB } from "@/lib/db";
 import Meal from "@/models/Meal";
@@ -52,12 +52,11 @@ const isAfterCutoff = (targetDateKey: string) => {
   return null;
 };
 
-const getEmailFromToken = async () => {
+const getEmailFromToken = async (req: Request) => {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET missing");
 
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
+  const token = await getAuthToken(req);
 
   if (!token) {
     return null;
@@ -69,7 +68,7 @@ const getEmailFromToken = async () => {
 
 export async function GET(req: Request) {
   try {
-    const email = await getEmailFromToken();
+    const email = await getEmailFromToken(req);
     if (!email) {
       return NextResponse.json(
         { message: "Unauthorized" },
@@ -161,7 +160,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const email = await getEmailFromToken();
+    const email = await getEmailFromToken(req);
     if (!email) {
       return NextResponse.json({ message: "Invalid token" }, { status: 401 });
     }
