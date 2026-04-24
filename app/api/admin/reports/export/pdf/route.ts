@@ -100,7 +100,7 @@ export async function GET(req: Request) {
       .toISOString()
       .slice(0, 10)}.pdf`;
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,

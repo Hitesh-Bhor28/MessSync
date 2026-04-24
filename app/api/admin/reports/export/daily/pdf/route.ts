@@ -138,12 +138,12 @@ export async function GET(req: Request) {
 
     const buffer = await buildPdf(dateKey);
 
-    return new NextResponse(buffer, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="daily-report-${dateKey}.pdf"`,
-      },
-    });
+   return new NextResponse(new Uint8Array(buffer), {
+  headers: {
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `attachment; filename="daily-report-${dateKey}.pdf"`,
+  },
+});
   } catch (err) {
     console.error(err);
     return NextResponse.json(
