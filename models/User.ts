@@ -20,7 +20,10 @@ const UserSchema = new mongoose.Schema(
       type: String,
       enum: ["student", "admin"],
       required: true,
-      default: "student",
+    },
+    expoPushToken: {
+      type: String,
+      default: "",
     },
   },
   { timestamps: true }

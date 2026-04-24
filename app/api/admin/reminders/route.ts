@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     await connectDB();
 
     const students = await User.find({ role: "student" })
-      .select("email name")
+      .select("email name expoPushToken")
       .lean();
 
     const submitted = await Meal.find({ date: dateKey })
@@ -75,45 +75,32 @@ export async function POST(req: Request) {
       (student) => !submittedEmails.has(student.email)
     );
 
-    if (!process.env.SMTP_HOST) {
-      return NextResponse.json(
-        {
-          message:
-            "SMTP settings missing. Configure SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_FROM.",
-          pending: pendingStudents.length,
+    const messages = pendingStudents
+      .map((s) => s.expoPushToken)
+      .filter((token) => token && token.startsWith("ExponentPushToken"))
+      .map((token) => ({
+        to: token,
+        sound: "default",
+        title: "MessSync Reminder",
+        body: `Don't forget to lock in your meals for ${dateKey} before 10:00 PM!`,
+        data: { route: "meals" },
+      }));
+
+    if (messages.length > 0) {
+      const response = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Accept-encoding": "gzip, deflate",
+          "Content-Type": "application/json",
         },
-        { status: 400 }
-      );
-    }
-
-    const nodemailer = await import("nodemailer");
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    const from = process.env.SMTP_FROM || process.env.SMTP_USER || "";
-    const bcc = pendingStudents.map((student) => student.email);
-
-    if (bcc.length === 0) {
-      return NextResponse.json({
-        message: "No pending students to remind.",
-        pending: 0,
+        body: JSON.stringify(messages),
       });
-    }
 
-    await transporter.sendMail({
-      from,
-      to: from,
-      bcc,
-      subject: "MessSync: Meal selection reminder",
-      text: `Please submit your meal selection for ${dateKey}. Deadline is 10:00 PM today.`,
-    });
+      if (!response.ok) {
+        console.error("Expo Push Warning:", await response.text());
+      }
+    }
 
     return NextResponse.json({
       message: "Reminders sent.",
